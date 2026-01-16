@@ -46,11 +46,11 @@
     <div class="control-panel">
         <div class="slider-group">
             <label>切割份数 <span id="s-val">4</span></label>
-            <input type="range" id="slices" min="2" max="4" value="4">
+            <input type="range" id="slices" min="3" max="6" value="4">
         </div>
         <div class="slider-group">
-            <label>模拟 X 间隙 (px) <span id="g-val">26</span></label>
-            <input type="range" id="gap" min="0" max="100" value="26">
+            <label>模拟 X 间隙 (px) <span id="g-val">16</span></label>
+            <input type="range" id="gap" min="0" max="100" value="16">
         </div>
     </div>
 
@@ -87,21 +87,28 @@
     function updateUI() {
         document.getElementById('s-val').innerText = slicesInput.value;
         document.getElementById('g-val').innerText = gapInput.value + 'px';
+        render();
     }
 
     // 核心渲染函数（重操作，绑定到 change 事件）
     function render() {
         imgContainer.innerHTML = '';
         const n = parseInt(slicesInput.value);
-        const gap = parseInt(gapInput.value);
+        const visualGap = parseInt(gapInput.value); // 输入值作为视觉间隙(px)
+        
+        // 获取参考宽度：如果预览区未显示，则使用上传区宽度
+        const previewWidth = imgContainer.offsetWidth == 0 ? dropZone.offsetWidth : imgContainer.offsetWidth;
+        
+        // 计算源图像中需要切除的像素 (保持视觉间隙恒定)
+        // 逻辑：源间隙 = 视觉间隙 * (原图宽 / 预览宽)
+        // 这样无论原图分辨率多高，在预览（以及最终平台显示）时的视觉间隙都保持一致
+        const sourceGap = visualGap * (sourceImg.width / previewWidth);
         
         // 计算每一块切片在原图中应占的高度
-        const sliceH = (sourceImg.height - (gap * (n - 1))) / n;
+        const sliceH = (sourceImg.height - (sourceGap * (n - 1))) / n;
         
-        // 设置预览图之间的间隙（根据预览宽度缩放）
-        const initOffset = imgContainer.offsetWidth == 0 ? dropZone.offsetWidth : imgContainer.offsetWidth
-        const displayGap = gap * (initOffset / sourceImg.width);
-        imgContainer.style.gap = displayGap + 'px';
+        // 设置预览图之间的间隙 (直接使用设定值)
+        imgContainer.style.gap = visualGap + 'px';
 
         // 性能优化：限制预览图宽度，避免高分辨率卡顿
         const MAX_PREVIEW_WIDTH = 800;
@@ -116,7 +123,7 @@
             const ctx = canvas.getContext('2d');
             
             // sourceY 逻辑：起始点 + (切片高度 + 间隙) * 索引
-            const sy = i * (sliceH + gap);
+            const sy = i * (sliceH + sourceGap);
             // 绘制时进行缩放：原图区域 -> 缩小的 Canvas 区域
             ctx.drawImage(sourceImg, 0, sy, sourceImg.width, sliceH, 0, 0, canvasW, canvasH);
             
@@ -126,13 +133,18 @@
         }
         previewArea.style.display = 'block';
         dropZone.style.display = 'none';
+        
+        // 保存当前的 sourceGap 供下载使用，避免 resize 导致不一致
+        window.currentSourceGap = sourceGap;
     }
 
     // 下载逻辑：重新生成原画质切片并下载
     function downloadAll() {
+        if (window.currentSourceGap === undefined) return;
+        
         const n = parseInt(slicesInput.value);
-        const gap = parseInt(gapInput.value);
-        const sliceH = (sourceImg.height - (gap * (n - 1))) / n;
+        const sourceGap = window.currentSourceGap;
+        const sliceH = (sourceImg.height - (sourceGap * (n - 1))) / n;
 
         // 创建临时画布用于生成原图切片
         const canvas = document.createElement('canvas');
@@ -142,7 +154,7 @@
 
         for (let i = 0; i < n; i++) {
             setTimeout(() => {
-                const sy = i * (sliceH + gap);
+                const sy = i * (sliceH + sourceGap);
                 ctx.clearRect(0, 0, canvas.width, canvas.height); // 清空画布
                 ctx.drawImage(sourceImg, 0, sy, sourceImg.width, sliceH, 0, 0, canvas.width, canvas.height);
                 
@@ -186,9 +198,6 @@
     slicesInput.oninput = updateUI;
     gapInput.oninput = updateUI;
     
-    slicesInput.onchange = render;
-    gapInput.onchange = render;
-
     // 初始化 UI 状态
     updateUI();
 </script>
