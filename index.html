@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X 纵向长图切割工具</title>
+    <style>
+        :root {
+            --x-blue: #1da1f2;
+            --x-dark: #15202b;
+            --bg: #f7f9f9;
+        }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 40px 20px; }
+        .card { background: white; width: 100%; max-width: 500px; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        h2 { margin-top: 0; color: #0f1419; font-size: 20px; text-align: center; }
+        
+        /* 控制区 */
+        .control-panel { background: #f0f3f4; padding: 15px; border-radius: 12px; margin-bottom: 20px; }
+        .slider-group { margin-bottom: 15px; }
+        .slider-group label { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px; color: #536471; }
+        input[type="range"] { width: 100%; accent-color: var(--x-blue); }
+
+        /* 上传区 */
+        .upload-zone { border: 2px dashed #cfd9de; border-radius: 12px; padding: 40px 20px; text-align: center; cursor: pointer; transition: 0.2s; }
+        .upload-zone:hover { background: #e8f5fe; border-color: var(--x-blue); }
+        
+        /* 预览区 */
+        #preview-area { display: none; margin-top: 20px; }
+        .x-mockup { background: var(--x-dark); padding: 15px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; }
+        #img-container { width: 100%; display: flex; flex-direction: column; }
+        #img-container img { width: 100%; border-radius: 4px; }
+        
+        /* 按钮 */
+        .btn-group { margin-top: 20px; display: grid; gap: 10px; }
+        button { padding: 12px; border: none; border-radius: 25px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 15px; }
+        .btn-main { background: var(--x-blue); color: white; }
+        .btn-main:hover { background: #1a91da; }
+        .btn-outline { background: #eff3f4; color: #0f1419; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>X 纵向长图切割器</h2>
+    
+    <div class="control-panel">
+        <div class="slider-group">
+            <label>切割份数 <span id="s-val">4</span></label>
+            <input type="range" id="slices" min="2" max="4" value="4">
+        </div>
+        <div class="slider-group">
+            <label>模拟 X 间隙 (px) <span id="g-val">12</span></label>
+            <input type="range" id="gap" min="0" max="100" value="12">
+        </div>
+    </div>
+
+    <div class="upload-zone" id="drop-zone">
+        <div id="upload-prompt">
+            <p style="font-weight:bold; margin:0;">点击或拖入长图</p>
+            <p style="font-size:13px; color:#536471; margin:5px 0 0;">自动识别高度并分块</p>
+        </div>
+        <input type="file" id="file-input" accept="image/*" hidden>
+    </div>
+
+    <div id="preview-area">
+        <div class="x-mockup">
+            <div id="img-container"></div>
+        </div>
+        <div class="btn-group">
+            <button class="btn-main" onclick="downloadAll()">一键下载全部切片</button>
+            <button class="btn-outline" onclick="location.reload()">重新上传</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const fileInput = document.getElementById('file-input');
+    const dropZone = document.getElementById('drop-zone');
+    const slicesInput = document.getElementById('slices');
+    const gapInput = document.getElementById('gap');
+    const imgContainer = document.getElementById('img-container');
+    const previewArea = document.getElementById('preview-area');
+
+    let sourceImg = null;
+    let currentImg = null;
+
+    // 逻辑：更新 UI 数值并重新渲染
+    function update() {
+        document.getElementById('s-val').innerText = slicesInput.value;
+        document.getElementById('g-val').innerText = gapInput.value + 'px';
+        if (sourceImg) render();
+    }
+
+    // 核心渲染函数
+    function render() {
+        imgContainer.innerHTML = '';
+        const n = parseInt(slicesInput.value);
+        const gap = parseInt(gapInput.value);
+        
+        // 计算每一块切片在原图中应占的高度
+        const sliceH = (sourceImg.height - (gap * (n - 1))) / n;
+        
+        // 设置预览图之间的间隙（根据预览宽度缩放）
+        const displayGap = gap * (imgContainer.offsetWidth / sourceImg.width);
+        imgContainer.style.gap = displayGap + 'px';
+
+        for (let i = 0; i < n; i++) {
+            const canvas = document.createElement('canvas');
+            canvas.width = sourceImg.width;
+            canvas.height = sliceH;
+            const ctx = canvas.getContext('2d');
+            
+            // sourceY 逻辑：起始点 + (切片高度 + 间隙) * 索引
+            const sy = i * (sliceH + gap);
+            ctx.drawImage(sourceImg, 0, sy, sourceImg.width, sliceH, 0, 0, canvas.width, sliceH);
+            
+            const img = document.createElement('img');
+            img.src = canvas.toDataURL('image/png');
+            imgContainer.appendChild(img);
+        }
+        previewArea.style.display = 'block';
+        dropZone.style.display = 'none';
+    }
+
+    // 下载逻辑：循环触发链接点击
+    function downloadAll() {
+        const imgs = imgContainer.querySelectorAll('img');
+        imgs.forEach((img, i) => {
+            setTimeout(() => {
+                const a = document.createElement('a');
+                a.href = img.src;
+                a.download = `X_Split_${i+1}.png`;
+                a.click();
+            }, i * 250); // 间隔 250ms 避免浏览器拦截
+        });
+    }
+
+    // 文件监听
+    fileInput.onchange = e => {
+        if (e.target.files && e.target.files[0]) {
+            handleFile(e.target.files[0]);
+        }
+    };
+
+    // 处理文件上传
+    const handleFile = (file) => {
+        if (!file || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            sourceImg = new Image();
+            sourceImg.onload = render;
+            sourceImg.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+
+    dropZone.onclick = () => fileInput.click();
+    dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.background = "#e8f5fe"; };
+    dropZone.ondragleave = () => { dropZone.style.background = ""; };
+    dropZone.ondrop = (e) => {
+        e.preventDefault();
+        dropZone.style.background = "";
+        handleFile(e.dataTransfer.files[0]);
+    };
+    slicesInput.oninput = update;
+    gapInput.oninput = update;
+</script>
+</body>
+</html>
