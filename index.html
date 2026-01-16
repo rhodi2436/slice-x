@@ -49,8 +49,8 @@
             <input type="range" id="slices" min="2" max="4" value="4">
         </div>
         <div class="slider-group">
-            <label>模拟 X 间隙 (px) <span id="g-val">12</span></label>
-            <input type="range" id="gap" min="0" max="100" value="12">
+            <label>模拟 X 间隙 (px) <span id="g-val">26</span></label>
+            <input type="range" id="gap" min="0" max="100" value="26">
         </div>
     </div>
 
@@ -82,16 +82,14 @@
     const previewArea = document.getElementById('preview-area');
 
     let sourceImg = null;
-    let currentImg = null;
 
-    // 逻辑：更新 UI 数值并重新渲染
-    function update() {
+    // 仅更新 UI 数值显示（轻量操作，绑定到 input 事件）
+    function updateUI() {
         document.getElementById('s-val').innerText = slicesInput.value;
         document.getElementById('g-val').innerText = gapInput.value + 'px';
-        if (sourceImg) render();
     }
 
-    // 核心渲染函数
+    // 核心渲染函数（重操作，绑定到 change 事件）
     function render() {
         imgContainer.innerHTML = '';
         const n = parseInt(slicesInput.value);
@@ -101,7 +99,8 @@
         const sliceH = (sourceImg.height - (gap * (n - 1))) / n;
         
         // 设置预览图之间的间隙（根据预览宽度缩放）
-        const displayGap = gap * (imgContainer.offsetWidth / sourceImg.width);
+        const initOffset = imgContainer.offsetWidth == 0 ? dropZone.offsetWidth : imgContainer.offsetWidth
+        const displayGap = gap * (initOffset / sourceImg.width);
         imgContainer.style.gap = displayGap + 'px';
 
         for (let i = 0; i < n; i++) {
@@ -162,8 +161,16 @@
         dropZone.style.background = "";
         handleFile(e.dataTransfer.files[0]);
     };
-    slicesInput.oninput = update;
-    gapInput.oninput = update;
+    
+    // 性能优化：拖动时只更新数值，松手时才渲染图片
+    slicesInput.oninput = updateUI;
+    gapInput.oninput = updateUI;
+    
+    slicesInput.onchange = render;
+    gapInput.onchange = render;
+
+    // 初始化 UI 状态
+    updateUI();
 </script>
 </body>
 </html>
