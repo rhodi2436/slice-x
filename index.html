@@ -103,15 +103,22 @@
         const displayGap = gap * (initOffset / sourceImg.width);
         imgContainer.style.gap = displayGap + 'px';
 
+        // 性能优化：限制预览图宽度，避免高分辨率卡顿
+        const MAX_PREVIEW_WIDTH = 800;
+        const scale = sourceImg.width > MAX_PREVIEW_WIDTH ? MAX_PREVIEW_WIDTH / sourceImg.width : 1;
+        const canvasW = sourceImg.width * scale;
+        const canvasH = sliceH * scale;
+
         for (let i = 0; i < n; i++) {
             const canvas = document.createElement('canvas');
-            canvas.width = sourceImg.width;
-            canvas.height = sliceH;
+            canvas.width = canvasW;
+            canvas.height = canvasH;
             const ctx = canvas.getContext('2d');
             
             // sourceY 逻辑：起始点 + (切片高度 + 间隙) * 索引
             const sy = i * (sliceH + gap);
-            ctx.drawImage(sourceImg, 0, sy, sourceImg.width, sliceH, 0, 0, canvas.width, sliceH);
+            // 绘制时进行缩放：原图区域 -> 缩小的 Canvas 区域
+            ctx.drawImage(sourceImg, 0, sy, sourceImg.width, sliceH, 0, 0, canvasW, canvasH);
             
             const img = document.createElement('img');
             img.src = canvas.toDataURL('image/png');
@@ -121,17 +128,30 @@
         dropZone.style.display = 'none';
     }
 
-    // 下载逻辑：循环触发链接点击
+    // 下载逻辑：重新生成原画质切片并下载
     function downloadAll() {
-        const imgs = imgContainer.querySelectorAll('img');
-        imgs.forEach((img, i) => {
+        const n = parseInt(slicesInput.value);
+        const gap = parseInt(gapInput.value);
+        const sliceH = (sourceImg.height - (gap * (n - 1))) / n;
+
+        // 创建临时画布用于生成原图切片
+        const canvas = document.createElement('canvas');
+        canvas.width = sourceImg.width;
+        canvas.height = sliceH;
+        const ctx = canvas.getContext('2d');
+
+        for (let i = 0; i < n; i++) {
             setTimeout(() => {
+                const sy = i * (sliceH + gap);
+                ctx.clearRect(0, 0, canvas.width, canvas.height); // 清空画布
+                ctx.drawImage(sourceImg, 0, sy, sourceImg.width, sliceH, 0, 0, canvas.width, canvas.height);
+                
                 const a = document.createElement('a');
-                a.href = img.src;
+                a.href = canvas.toDataURL('image/png');
                 a.download = `X_Split_${i+1}.png`;
                 a.click();
-            }, i * 250); // 间隔 250ms 避免浏览器拦截
-        });
+            }, i * 300); // 间隔 300ms 依次处理
+        }
     }
 
     // 文件监听
