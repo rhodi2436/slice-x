@@ -14,6 +14,11 @@
         .card { background: white; width: 100%; max-width: 500px; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
         h2 { margin-top: 0; color: #0f1419; font-size: 20px; text-align: center; }
         
+        /* 模式切换 */
+        .mode-switch { display: flex; background: #eff3f4; border-radius: 25px; padding: 4px; margin-bottom: 20px; }
+        .mode-btn { flex: 1; border: none; background: none; padding: 10px; border-radius: 20px; cursor: pointer; font-weight: bold; color: #536471; transition: 0.2s; }
+        .mode-btn.active { background: white; color: var(--x-blue); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
         /* 控制区 */
         .control-panel { background: #f0f3f4; padding: 15px; border-radius: 12px; margin-bottom: 20px; }
         .slider-group { margin-bottom: 15px; }
@@ -25,10 +30,10 @@
         .upload-zone:hover { background: #e8f5fe; border-color: var(--x-blue); }
         
         /* 预览区 */
-        #preview-area { display: none; margin-top: 20px; }
+        #preview-area, #stitch-preview-area { display: none; margin-top: 20px; }
         .x-mockup { background: var(--x-dark); padding: 15px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; }
-        #img-container { width: 100%; display: flex; flex-direction: column; }
-        #img-container img { width: 100%; border-radius: 4px; }
+        #img-container, #stitch-img-container { width: 100%; display: flex; flex-direction: column; }
+        #img-container img, #stitch-img-container img { width: 100%; border-radius: 4px; }
         
         /* 按钮 */
         .btn-group { margin-top: 20px; display: grid; gap: 10px; }
@@ -36,52 +41,127 @@
         .btn-main { background: var(--x-blue); color: white; }
         .btn-main:hover { background: #1a91da; }
         .btn-outline { background: #eff3f4; color: #0f1419; }
+        
+        .metadata-area { margin-top: 15px; display: none; }
+        .metadata-area textarea { width: 100%; height: 80px; padding: 10px; border-radius: 8px; border: 1px solid #cfd9de; background: #f7f9f9; font-family: monospace; font-size: 12px; resize: none; box-sizing: border-box; }
+        .metadata-label { font-size: 13px; color: #536471; margin-bottom: 5px; display: block; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>X 纵向长图切割器</h2>
-    
-    <div class="control-panel">
-        <div class="slider-group">
-            <label>切割份数 <span id="s-val">4</span></label>
-            <input type="range" id="slices" min="3" max="6" value="4">
+    <div class="mode-switch">
+        <button class="mode-btn active" onclick="switchMode('slice')">切割模式</button>
+        <button class="mode-btn" onclick="switchMode('stitch')">拼接模式</button>
+    </div>
+
+    <!-- 切割模式 -->
+    <div id="slice-app">
+        <div class="control-panel">
+            <div class="slider-group">
+                <label>切割份数 <span id="s-val">4</span></label>
+                <input type="range" id="slices" min="3" max="6" value="4">
+            </div>
+            <div class="slider-group">
+                <label>模拟 X 间隙 (px) <span id="g-val">16</span></label>
+                <input type="range" id="gap" min="0" max="100" value="16">
+            </div>
+            <div class="slider-group">
+                <label>缩放预处理 <span id="scale-val">1.00</span></label>
+                <input type="range" id="scale" min="1" max="1.5" step="0.01" value="1">
+            </div>
+            <div class="slider-group">
+                <label>纵向位移 <span id="offset-val">0%</span></label>
+                <input type="range" id="offset" min="-50" max="50" step="1" value="0">
+            </div>
         </div>
-        <div class="slider-group">
-            <label>模拟 X 间隙 (px) <span id="g-val">16</span></label>
-            <input type="range" id="gap" min="0" max="100" value="16">
+
+        <div class="upload-zone" id="drop-zone">
+            <div id="upload-prompt">
+                <p style="font-weight:bold; margin:0;">点击或拖入长图</p>
+                <p style="font-size:13px; color:#536471; margin:5px 0 0;">自动识别高度并分块</p>
+            </div>
+            <input type="file" id="file-input" accept="image/*" hidden>
         </div>
-        <div class="slider-group">
-            <label>缩放预处理 <span id="scale-val">1.00</span></label>
-            <input type="range" id="scale" min="1" max="1.5" step="0.01" value="1">
-        </div>
-        <div class="slider-group">
-            <label>纵向位移 <span id="offset-val">0%</span></label>
-            <input type="range" id="offset" min="-50" max="50" step="1" value="0">
+
+        <div id="preview-area">
+            <div class="x-mockup">
+                <div id="img-container"></div>
+            </div>
+            <div class="btn-group">
+                <button class="btn-main" onclick="downloadAll()">一键下载全部切片</button>
+                <button class="btn-outline" onclick="resetApp()">重新上传</button>
+            </div>
         </div>
     </div>
 
-    <div class="upload-zone" id="drop-zone">
-        <div id="upload-prompt">
-            <p style="font-weight:bold; margin:0;">点击或拖入长图</p>
-            <p style="font-size:13px; color:#536471; margin:5px 0 0;">自动识别高度并分块</p>
+    <!-- 拼接模式 -->
+    <div id="stitch-app" style="display:none;">
+        <div class="control-panel">
+             <div class="slider-group">
+                <label>填充间隙 (px) <span id="stitch-g-val">0</span></label>
+                <input type="range" id="stitch-gap" min="0" max="100" value="0">
+            </div>
         </div>
-        <input type="file" id="file-input" accept="image/*" hidden>
-    </div>
 
-    <div id="preview-area">
-        <div class="x-mockup">
-            <div id="img-container"></div>
+        <div class="upload-zone" id="stitch-drop-zone">
+            <div id="stitch-upload-prompt">
+                <p style="font-weight:bold; margin:0;">点击或拖入多张切片</p>
+                <p style="font-size:13px; color:#536471; margin:5px 0 0;">文件名排序拼接</p>
+            </div>
+            <input type="file" id="stitch-file-input" accept="image/*" multiple hidden>
         </div>
-        <div class="btn-group">
-            <button class="btn-main" onclick="downloadAll()">一键下载全部切片</button>
-            <button class="btn-outline" onclick="location.reload()">重新上传</button>
+
+        <div id="stitch-preview-area">
+            <div class="x-mockup">
+                <div id="stitch-img-container"></div>
+            </div>
+            <div class="metadata-area" id="metadata-box">
+                <label class="metadata-label">AI 填充元数据 (Gap Metadata)</label>
+                <textarea readonly id="metadata-content"></textarea>
+            </div>
+            <div class="btn-group">
+                <button class="btn-main" onclick="downloadStitched()">下载还原长图</button>
+                <button class="btn-outline" onclick="resetApp()">重新上传</button>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
+    // 模式切换
+    function switchMode(mode) {
+        document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+        if (mode === 'slice') {
+            document.querySelector('.mode-btn:nth-child(1)').classList.add('active');
+            document.getElementById('slice-app').style.display = 'block';
+            document.getElementById('stitch-app').style.display = 'none';
+        } else {
+            document.querySelector('.mode-btn:nth-child(2)').classList.add('active');
+            document.getElementById('slice-app').style.display = 'none';
+            document.getElementById('stitch-app').style.display = 'block';
+        }
+    }
+
+    function resetApp() {
+        if (document.getElementById('slice-app').style.display !== 'none') {
+            // 切割模式重置
+            sourceImg = null;
+            fileInput.value = '';
+            dropZone.style.display = 'block';
+            previewArea.style.display = 'none';
+        } else {
+            // 拼接模式重置
+            stitchImages = [];
+            stitchFileInput.value = '';
+            stitchDropZone.style.display = 'block';
+            stitchPreviewArea.style.display = 'none';
+            document.getElementById('metadata-box').style.display = 'none';
+            stitchImgContainer.innerHTML = '';
+        }
+    }
+
+    // --- 切割模式逻辑 ---
     const fileInput = document.getElementById('file-input');
     const dropZone = document.getElementById('drop-zone');
     const slicesInput = document.getElementById('slices');
@@ -248,6 +328,137 @@
     
     // 初始化 UI 状态
     updateUI();
+
+    // --- 拼接模式逻辑 ---
+    const stitchFileInput = document.getElementById('stitch-file-input');
+    const stitchDropZone = document.getElementById('stitch-drop-zone');
+    const stitchGapInput = document.getElementById('stitch-gap');
+    const stitchImgContainer = document.getElementById('stitch-img-container');
+    const stitchPreviewArea = document.getElementById('stitch-preview-area');
+    const metadataBox = document.getElementById('metadata-content');
+    
+    let stitchImages = [];
+    
+    // 监听 Gap 变化
+    stitchGapInput.oninput = () => {
+        document.getElementById('stitch-g-val').innerText = stitchGapInput.value + 'px';
+        renderStitch();
+    }
+
+    stitchFileInput.onchange = e => {
+        if (e.target.files && e.target.files.length > 0) {
+            handleStitchFiles(e.target.files);
+        }
+    };
+
+    stitchDropZone.onclick = () => stitchFileInput.click();
+    stitchDropZone.ondragover = (e) => { e.preventDefault(); stitchDropZone.style.background = "#e8f5fe"; };
+    stitchDropZone.ondragleave = () => { stitchDropZone.style.background = ""; };
+    stitchDropZone.ondrop = (e) => {
+        e.preventDefault();
+        stitchDropZone.style.background = "";
+        handleStitchFiles(e.dataTransfer.files);
+    };
+
+    function handleStitchFiles(files) {
+        // 按文件名排序
+        const sortedFiles = Array.from(files).sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'}));
+        
+        Promise.all(sortedFiles.map(file => {
+            return new Promise((resolve) => {
+                if (!file.type.startsWith('image/')) resolve(null);
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.src = URL.createObjectURL(file);
+            });
+        })).then(images => {
+            stitchImages = images.filter(img => img !== null);
+            if(stitchImages.length > 0) renderStitch();
+        });
+    }
+
+    function renderStitch() {
+        if (stitchImages.length === 0) return;
+        
+        stitchDropZone.style.display = 'none';
+        stitchPreviewArea.style.display = 'block';
+        stitchImgContainer.innerHTML = ''; // Clear previous
+
+        const baseWidth = stitchImages[0].width;
+        const gap = parseInt(stitchGapInput.value);
+        let totalHeight = 0;
+        let metadata = [];
+        
+        // 计算总高度
+        stitchImages.forEach((img, idx) => {
+            const h = img.height * (baseWidth / img.width);
+            totalHeight += h;
+            if (gap > 0 && idx < stitchImages.length - 1) {
+                totalHeight += gap;
+            }
+        });
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = baseWidth;
+        canvas.height = totalHeight;
+        const ctx = canvas.getContext('2d');
+        
+        let currentY = 0;
+        
+        stitchImages.forEach((img, idx) => {
+            const h = img.height * (baseWidth / img.width);
+            ctx.drawImage(img, 0, currentY, baseWidth, h);
+            currentY += h;
+            
+            if (gap > 0 && idx < stitchImages.length - 1) {
+                drawMosaic(ctx, 0, currentY, baseWidth, gap);
+                
+                metadata.push({
+                    index: idx,
+                    y: currentY,
+                    height: gap,
+                    width: baseWidth
+                });
+                
+                currentY += gap;
+            }
+        });
+        
+        const resultImg = document.createElement('img');
+        resultImg.src = canvas.toDataURL('image/png');
+        resultImg.style.width = '100%'; 
+        stitchImgContainer.appendChild(resultImg);
+        
+        if (gap > 0) {
+             document.getElementById('metadata-box').style.display = 'block';
+             metadataBox.value = JSON.stringify(metadata, null, 2);
+        } else {
+             document.getElementById('metadata-box').style.display = 'none';
+        }
+    }
+    
+    function drawMosaic(ctx, x, y, width, height, size = 16) {
+        for(let py = y; py < y + height; py += size) {
+            for(let px = x; px < x + width; px += size) {
+                const gray = Math.floor(Math.random() * 50 + 200); 
+                ctx.fillStyle = `rgb(${gray},${gray},${gray})`;
+                const w = Math.min(size, x + width - px);
+                const h = Math.min(size, y + height - py);
+                ctx.fillRect(px, py, w, h);
+            }
+        }
+    }
+    
+    function downloadStitched() {
+         const img = stitchImgContainer.querySelector('img');
+         if(img) {
+             const link = document.createElement('a');
+             link.download = 'X_Stitched.png';
+             link.href = img.src;
+             link.click();
+         }
+    }
+
 </script>
 </body>
 </html>
