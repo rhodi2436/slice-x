@@ -229,7 +229,7 @@
         }
     };
 
-    let currentLang = 'en';
+    let currentLang = navigator.language.startsWith('zh') ? 'zh' : 'en';
 
     function setLanguage(lang) {
         if (!translations[lang]) return;
@@ -273,8 +273,8 @@
     }
 
     // Initialize Language
-    const savedLang = localStorage.getItem('x-slice-lang') || (navigator.language.startsWith('zh') ? 'zh' : 'en');
-    setLanguage(savedLang);
+    const savedLang = localStorage.getItem('x-slice-lang');
+    setLanguage(savedLang || currentLang);
 
     // 模式切换
     function switchMode(mode) {
