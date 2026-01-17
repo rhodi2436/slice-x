@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>X 纵向长图切割工具</title>
+    <title data-i18n="title">X 纵向长图切割工具</title>
     <style>
         :root {
             --x-blue: #1da1f2;
             --x-dark: #15202b;
             --bg: #f7f9f9;
         }
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 40px 20px; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; }
         .card { background: white; width: 100%; max-width: 500px; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
         h2 { margin-top: 0; color: #0f1419; font-size: 20px; text-align: center; }
         
@@ -61,41 +61,53 @@
         /* 移动端优化：增加拖拽时的视觉反馈 */
         .sortable-item.touch-dragging { opacity: 0.6; background: #e8f5fe; border: 2px dashed var(--x-blue); }
         .sortable-item.touch-target { border-bottom: 2px solid var(--x-blue); }
+        
+        /* 语言切换 */
+        .lang-switch { position: absolute; top: 15px; right: 20px; font-size: 13px; display: flex; gap: 8px; z-index: 10; }
+        .lang-btn { cursor: pointer; color: #9aa8b1; text-decoration: none; padding: 2px 4px; border-radius: 4px; transition: 0.2s; }
+        .lang-btn:hover { color: #536471; }
+        .lang-btn.active { font-weight: bold; color: var(--x-blue); background: #e8f5fe; }
+        
+        .card { position: relative; background: white; width: 100%; max-width: 500px; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
     </style>
 </head>
 <body>
+    <div class="lang-switch">
+        <a class="lang-btn active" onclick="setLanguage('en')" data-lang="en">EN</a>
+        <a class="lang-btn" onclick="setLanguage('zh')" data-lang="zh">中文</a>
+    </div>
 
 <div class="card">
     <div class="mode-switch">
-        <button class="mode-btn active" onclick="switchMode('slice')">切割模式</button>
-        <button class="mode-btn" onclick="switchMode('stitch')">拼接模式</button>
+        <button class="mode-btn active" onclick="switchMode('slice')" data-i18n="sliceMode">切割模式</button>
+        <button class="mode-btn" onclick="switchMode('stitch')" data-i18n="stitchMode">拼接模式</button>
     </div>
 
     <!-- 切割模式 -->
     <div id="slice-app">
         <div class="control-panel">
             <div class="slider-group">
-                <label>切割份数 <span id="s-val">4</span></label>
+                <label><span data-i18n="slices">切割份数</span> <span id="s-val">4</span></label>
                 <input type="range" id="slices" min="3" max="6" value="4">
             </div>
             <div class="slider-group">
-                <label>模拟 X 间隙 (px) <span id="g-val">16</span></label>
+                <label><span data-i18n="gap">模拟 X 间隙 (px)</span> <span id="g-val">16</span></label>
                 <input type="range" id="gap" min="0" max="100" value="16">
             </div>
             <div class="slider-group">
-                <label>缩放预处理 <span id="scale-val">1.00</span></label>
+                <label><span data-i18n="scale">缩放预处理</span> <span id="scale-val">1.00</span></label>
                 <input type="range" id="scale" min="1" max="1.5" step="0.01" value="1">
             </div>
             <div class="slider-group">
-                <label>纵向位移 <span id="offset-val">0%</span></label>
+                <label><span data-i18n="offset">纵向位移</span> <span id="offset-val">0%</span></label>
                 <input type="range" id="offset" min="-50" max="50" step="1" value="0">
             </div>
         </div>
 
         <div class="upload-zone" id="drop-zone">
             <div id="upload-prompt">
-                <p style="font-weight:bold; margin:0;">点击或拖入长图</p>
-                <p style="font-size:13px; color:#536471; margin:5px 0 0;">自动识别高度并分块</p>
+                <p style="font-weight:bold; margin:0;" data-i18n="dragSource">点击或拖入长图</p>
+                <p style="font-size:13px; color:#536471; margin:5px 0 0;" data-i18n="dragSourceDesc">自动识别高度并分块</p>
             </div>
             <input type="file" id="file-input" accept="image/*" hidden>
         </div>
@@ -105,8 +117,8 @@
                 <div id="img-container"></div>
             </div>
             <div class="btn-group">
-                <button class="btn-main" onclick="downloadAll()">一键下载全部切片</button>
-                <button class="btn-outline" onclick="resetApp()">重新上传</button>
+                <button class="btn-main" onclick="downloadAll()" data-i18n="downloadAll">一键下载全部切片</button>
+                <button class="btn-outline" onclick="resetApp()" data-i18n="reset">重新上传</button>
             </div>
         </div>
     </div>
@@ -115,25 +127,25 @@
     <div id="stitch-app" style="display:none;">
         <div class="control-panel">
              <div class="slider-group">
-                <label>填充间隙 (px) <span id="stitch-g-val">0</span></label>
+                <label><span data-i18n="stitchGap">填充间隙 (px)</span> <span id="stitch-g-val">0</span></label>
                 <input type="range" id="stitch-gap" min="0" max="100" value="0">
             </div>
             
             <!-- X URL 输入 -->
             <div style="margin-top: 15px; border-top: 1px solid #e1e8ed; padding-top: 15px;">
                 <div style="display: flex; gap: 10px;">
-                    <input type="text" id="x-url" placeholder="粘贴 X 帖子链接 (https://x.com/...)" 
+                    <input type="text" id="x-url" placeholder="粘贴 X 帖子链接 (https://x.com/...)" data-i18n-placeholder="xUrlPlaceholder"
                         style="flex: 1; padding: 8px 12px; border: 1px solid #cfd9de; border-radius: 20px; outline: none;">
-                    <button class="btn-main" onclick="fetchFromX()" style="padding: 8px 15px; font-size: 13px; white-space: nowrap;">获取图片</button>
+                    <button class="btn-main" onclick="fetchFromX()" style="padding: 8px 15px; font-size: 13px; white-space: nowrap;" data-i18n="fetchBtn">获取图片</button>
                 </div>
-                <div id="fetch-status" style="font-size: 12px; margin-top: 5px; color: #536471; display: none;">正在获取...</div>
+                <div id="fetch-status" style="font-size: 12px; margin-top: 5px; color: #536471; display: none;" data-i18n="fetching">正在获取...</div>
             </div>
         </div>
 
         <div class="upload-zone" id="stitch-drop-zone">
             <div id="stitch-upload-prompt">
-                <p style="font-weight:bold; margin:0;">点击或拖入多张切片</p>
-                <p style="font-size:13px; color:#536471; margin:5px 0 0;">文件名排序拼接</p>
+                <p style="font-weight:bold; margin:0;" data-i18n="dragStitch">点击或拖入多张切片</p>
+                <p style="font-size:13px; color:#536471; margin:5px 0 0;" data-i18n="dragStitchDesc">文件名排序拼接</p>
             </div>
             <input type="file" id="stitch-file-input" accept="image/*" multiple hidden>
         </div>
@@ -146,14 +158,14 @@
                 <div id="stitch-img-container"></div>
             </div>
             <div class="metadata-area" id="metadata-box">
-                <label class="metadata-label">AI 填充元数据 (Gap Metadata)</label>
+                <label class="metadata-label" data-i18n="metadataLabel">AI 填充元数据 (Gap Metadata)</label>
                 <textarea readonly id="metadata-content"></textarea>
             </div>
             <div class="btn-group">
-                <button class="btn-main" onclick="downloadStitched()">下载还原长图</button>
+                <button class="btn-main" onclick="downloadStitched()" data-i18n="downloadStitched">下载还原长图</button>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                    <button class="btn-outline" onclick="reverseStitchImages()">⇅ 反转顺序</button>
-                    <button class="btn-outline" onclick="resetApp()">重新上传</button>
+                    <button class="btn-outline" onclick="reverseStitchImages()" data-i18n="reverseOrder">⇅ 反转顺序</button>
+                    <button class="btn-outline" onclick="resetApp()" data-i18n="reset">重新上传</button>
                 </div>
             </div>
         </div>
@@ -161,6 +173,109 @@
 </div>
 
 <script>
+    // i18n Data
+    const translations = {
+        zh: {
+            title: "X 纵向长图切割工具",
+            sliceMode: "切割模式",
+            stitchMode: "拼接模式",
+            slices: "切割份数",
+            gap: "模拟 X 间隙 (px)",
+            scale: "缩放预处理",
+            offset: "纵向位移",
+            dragSource: "点击或拖入长图",
+            dragSourceDesc: "自动识别高度并分块",
+            downloadAll: "一键下载全部切片",
+            reset: "重新上传",
+            stitchGap: "填充间隙 (px)",
+            xUrlPlaceholder: "粘贴 X 帖子链接 (https://x.com/...)",
+            fetchBtn: "获取图片",
+            fetching: "正在获取...",
+            dragStitch: "点击或拖入多张切片",
+            dragStitchDesc: "文件名排序拼接",
+            downloadStitched: "下载还原长图",
+            reverseOrder: "⇅ 反转顺序",
+            metadataLabel: "AI 填充元数据 (Gap Metadata)",
+            invalidUrl: "无效的 X 链接",
+            noImagesFound: "该推文中未找到图片",
+            imagesFound: "找到 {n} 张图片，正在下载...",
+            fetchError: "获取失败，请检查链接或稍后重试"
+        },
+        en: {
+            title: "X Long Image Slicer",
+            sliceMode: "Slice Mode",
+            stitchMode: "Stitch Mode",
+            slices: "Slices",
+            gap: "Mock Gap (px)",
+            scale: "Pre-scale",
+            "offset": "Vertical Offset",
+            dragSource: "Click or Drop Long Image",
+            dragSourceDesc: "Auto-detect height & slice",
+            downloadAll: "Download All Slices",
+            reset: "Upload New",
+            stitchGap: "Fill Gap (px)",
+            xUrlPlaceholder: "Paste X Post URL (https://x.com/...)",
+            fetchBtn: "Fetch Images",
+            fetching: "Fetching...",
+            dragStitch: "Click or Drop Slices",
+            dragStitchDesc: "Stitch by filename order",
+            downloadStitched: "Download Long Image",
+            reverseOrder: "⇅ Reverse Order",
+            metadataLabel: "Gap Metadata",
+            invalidUrl: "Invalid X URL",
+            noImagesFound: "No images found in this tweet",
+            imagesFound: "Found {n} images, downloading...",
+            fetchError: "Fetch failed, check URL or try again"
+        }
+    };
+
+    let currentLang = 'en';
+
+    function setLanguage(lang) {
+        if (!translations[lang]) return;
+        currentLang = lang;
+        const t = translations[lang];
+
+        // Update Text
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (t[key]) el.innerText = t[key];
+        });
+
+        // Update Placeholders
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+            const key = el.getAttribute('data-i18n-placeholder');
+            if (t[key]) el.placeholder = t[key];
+        });
+
+        // Update Title
+        document.title = t.title;
+
+        // Update html lang
+        document.documentElement.lang = lang;
+
+        // Update Button States
+        document.querySelectorAll('.lang-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
+        });
+
+        // Save Preference
+        localStorage.setItem('x-slice-lang', lang);
+    }
+
+    // Helper to get translation string in JS
+    function t(key, params = {}) {
+        let str = translations[currentLang][key] || key;
+        for (const k in params) {
+            str = str.replace(`{${k}}`, params[k]);
+        }
+        return str;
+    }
+
+    // Initialize Language
+    const savedLang = localStorage.getItem('x-slice-lang') || (navigator.language.startsWith('zh') ? 'zh' : 'en');
+    setLanguage(savedLang);
+
     // 模式切换
     function switchMode(mode) {
         document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
@@ -399,12 +514,12 @@
         // 提取 Tweet ID
         const match = url.match(/(?:twitter|x)\.com\/\w+\/status\/(\d+)/);
         if (!match) {
-            showStatus('无效的 X 链接', true);
+            showStatus(t('invalidUrl'), true);
             return;
         }
         const tweetId = match[1];
 
-        showStatus('正在解析推文数据...', false);
+        showStatus(t('fetching'), false);
 
         try {
             const response = await fetch(`https://api.fxtwitter.com/status/${tweetId}`);
@@ -413,12 +528,12 @@
             const data = await response.json();
             
             if (!data.tweet || !data.tweet.media || !data.tweet.media.photos || data.tweet.media.photos.length === 0) {
-                showStatus('该推文中未找到图片', true);
+                showStatus(t('noImagesFound'), true);
                 return;
             }
 
             const photos = data.tweet.media.photos;
-            showStatus(`找到 ${photos.length} 张图片，正在下载...`, false);
+            showStatus(t('imagesFound', {n: photos.length}), false);
 
             const imagePromises = photos.map(photo => {
                 return new Promise((resolve, reject) => {
@@ -444,7 +559,7 @@
 
         } catch (err) {
             console.error(err);
-            showStatus('获取失败，请检查链接或稍后重试', true);
+            showStatus(t('fetchError'), true);
         }
     }
 
@@ -460,7 +575,16 @@
         }
     };
 
-    // ... (rest event handlers)
+    stitchDropZone.onclick = () => stitchFileInput.click();
+    stitchDropZone.ondragover = (e) => { e.preventDefault(); stitchDropZone.style.background = "#e8f5fe"; };
+    stitchDropZone.ondragleave = () => { stitchDropZone.style.background = ""; };
+    stitchDropZone.ondrop = (e) => {
+        e.preventDefault();
+        stitchDropZone.style.background = "";
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleStitchFiles(e.dataTransfer.files);
+        }
+    };
 
     function handleStitchFiles(files) {
         // 按文件名排序
