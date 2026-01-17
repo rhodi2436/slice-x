@@ -56,7 +56,11 @@
         .sortable-item.dragging { opacity: 0.5; background: #f7f9f9; border-style: dashed; }
         .sortable-item img { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; margin-right: 12px; pointer-events: none; background: #eee; }
         .sortable-item span { flex: 1; font-size: 13px; color: #536471; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-        .sortable-icon { color: #cfd9de; margin-right: 10px; font-size: 18px; }
+        .sortable-icon { color: #cfd9de; margin-right: 10px; font-size: 18px; padding: 5px 10px; cursor: grab; touch-action: none; }
+        
+        /* 移动端优化：增加拖拽时的视觉反馈 */
+        .sortable-item.touch-dragging { opacity: 0.6; background: #e8f5fe; border: 2px dashed var(--x-blue); }
+        .sortable-item.touch-target { border-bottom: 2px solid var(--x-blue); }
     </style>
 </head>
 <body>
@@ -370,6 +374,7 @@
     
     let stitchImages = []; // Array of Image objects
     let dragStartIndex;
+    let touchDragItem = null; // 用于移动端拖拽
     
     // 监听 Gap 变化
     stitchGapInput.oninput = () => {
@@ -494,6 +499,7 @@
     }
 
     function addDragEvents(item) {
+        // Desktop Drag Events
         item.addEventListener('dragstart', function() {
             dragStartIndex = +this.dataset.index;
             this.classList.add('dragging');
@@ -520,6 +526,52 @@
         item.addEventListener('dragend', function() {
             this.classList.remove('dragging');
             document.querySelectorAll('.sortable-item').forEach(i => i.style.borderColor = '#e1e8ed');
+        });
+
+        // Touch Drag Events (Mobile)
+        // 绑定在图标上以避免影响列表滚动
+        const handle = item.querySelector('.sortable-icon');
+        
+        handle.addEventListener('touchstart', function(e) {
+            e.preventDefault(); // 阻止默认滚动
+            touchDragItem = item;
+            item.classList.add('touch-dragging');
+        }, {passive: false});
+
+        handle.addEventListener('touchmove', function(e) {
+            e.preventDefault(); 
+            if (!touchDragItem) return;
+
+            const touch = e.touches[0];
+            const target = document.elementFromPoint(touch.clientX, touch.clientY);
+            const targetItem = target ? target.closest('.sortable-item') : null;
+
+            // 清除旧的高亮
+            document.querySelectorAll('.sortable-item').forEach(i => i.classList.remove('touch-target'));
+
+            if (targetItem && targetItem !== touchDragItem) {
+                targetItem.classList.add('touch-target');
+            }
+        }, {passive: false});
+
+        handle.addEventListener('touchend', function(e) {
+            if (!touchDragItem) return;
+            
+            item.classList.remove('touch-dragging');
+            
+            const touch = e.changedTouches[0];
+            const target = document.elementFromPoint(touch.clientX, touch.clientY);
+            const targetItem = target ? target.closest('.sortable-item') : null;
+            
+            // 清理高亮
+            document.querySelectorAll('.sortable-item').forEach(i => i.classList.remove('touch-target'));
+
+            if (targetItem && targetItem !== item) {
+                const fromIndex = +item.dataset.index;
+                const toIndex = +targetItem.dataset.index;
+                swapItems(fromIndex, toIndex);
+            }
+            touchDragItem = null;
         });
     }
     
