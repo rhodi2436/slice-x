@@ -52,6 +52,14 @@
             <label>模拟 X 间隙 (px) <span id="g-val">16</span></label>
             <input type="range" id="gap" min="0" max="100" value="16">
         </div>
+        <div class="slider-group">
+            <label>缩放预处理 <span id="scale-val">1.00</span></label>
+            <input type="range" id="scale" min="1" max="1.5" step="0.01" value="1">
+        </div>
+        <div class="slider-group">
+            <label>纵向位移 <span id="offset-val">0%</span></label>
+            <input type="range" id="offset" min="-50" max="50" step="1" value="0">
+        </div>
     </div>
 
     <div class="upload-zone" id="drop-zone">
@@ -78,6 +86,8 @@
     const dropZone = document.getElementById('drop-zone');
     const slicesInput = document.getElementById('slices');
     const gapInput = document.getElementById('gap');
+    const scaleInput = document.getElementById('scale');
+    const offsetInput = document.getElementById('offset');
     const imgContainer = document.getElementById('img-container');
     const previewArea = document.getElementById('preview-area');
 
@@ -87,34 +97,41 @@
     function updateUI() {
         document.getElementById('s-val').innerText = slicesInput.value;
         document.getElementById('g-val').innerText = gapInput.value + 'px';
+        document.getElementById('scale-val').innerText = parseFloat(scaleInput.value).toFixed(2);
+        document.getElementById('offset-val').innerText = offsetInput.value + '%';
         render();
     }
 
     // 核心渲染函数（重操作，绑定到 change 事件）
     function render() {
-        imgContainer.innerHTML = '';
+        if (!sourceImg) return;
+        
         const n = parseInt(slicesInput.value);
-        const visualGap = parseInt(gapInput.value); // 输入值作为视觉间隙(px)
+        const visualGap = parseInt(gapInput.value); 
+        const userScale = parseFloat(scaleInput.value);
+        const userOffsetPct = parseInt(offsetInput.value) / 100;
         
-        // 获取参考宽度：如果预览区未显示，则使用上传区宽度
         const previewWidth = imgContainer.offsetWidth == 0 ? dropZone.offsetWidth : imgContainer.offsetWidth;
-        
-        // 计算源图像中需要切除的像素 (保持视觉间隙恒定)
-        // 逻辑：源间隙 = 视觉间隙 * (原图宽 / 预览宽)
-        // 这样无论原图分辨率多高，在预览（以及最终平台显示）时的视觉间隙都保持一致
         const sourceGap = visualGap * (sourceImg.width / previewWidth);
-        
-        // 计算每一块切片在原图中应占的高度
         const sliceH = (sourceImg.height - (sourceGap * (n - 1))) / n;
         
-        // 设置预览图之间的间隙 (直接使用设定值)
         imgContainer.style.gap = visualGap + 'px';
 
-        // 性能优化：限制预览图宽度，避免高分辨率卡顿
+        // DOM 重用优化：只有当切片数量变化时才重建 DOM，防止调整参数时页面闪烁或回滚
+        const existingImgs = imgContainer.querySelectorAll('img');
+        if (existingImgs.length !== n) {
+            imgContainer.innerHTML = '';
+            for (let k = 0; k < n; k++) {
+                imgContainer.appendChild(document.createElement('img'));
+            }
+        }
+        const targetImgs = imgContainer.querySelectorAll('img');
+
         const MAX_PREVIEW_WIDTH = 800;
-        const scale = sourceImg.width > MAX_PREVIEW_WIDTH ? MAX_PREVIEW_WIDTH / sourceImg.width : 1;
-        const canvasW = sourceImg.width * scale;
-        const canvasH = sliceH * scale;
+        const previewScale = sourceImg.width > MAX_PREVIEW_WIDTH ? MAX_PREVIEW_WIDTH / sourceImg.width : 1;
+        const canvasW = sourceImg.width * previewScale;
+        const canvasH = sliceH * previewScale;
+        const offsetPx = userOffsetPct * sourceImg.height;
 
         for (let i = 0; i < n; i++) {
             const canvas = document.createElement('canvas');
@@ -122,31 +139,48 @@
             canvas.height = canvasH;
             const ctx = canvas.getContext('2d');
             
-            // sourceY 逻辑：起始点 + (切片高度 + 间隙) * 索引
             const sy = i * (sliceH + sourceGap);
-            // 绘制时进行缩放：原图区域 -> 缩小的 Canvas 区域
-            ctx.drawImage(sourceImg, 0, sy, sourceImg.width, sliceH, 0, 0, canvasW, canvasH);
             
-            const img = document.createElement('img');
-            img.src = canvas.toDataURL('image/png');
-            imgContainer.appendChild(img);
+            ctx.save();
+            // 视口变换
+            ctx.translate(0, -sy * previewScale);
+            
+            // 中心变换
+            const cx = (sourceImg.width * previewScale) / 2;
+            const cy = (sourceImg.height * previewScale) / 2;
+            ctx.translate(cx, cy);
+            
+            // 用户变换
+            ctx.scale(userScale, userScale);
+            ctx.translate(0, offsetPx * previewScale);
+
+            // 绘制
+            ctx.drawImage(sourceImg, 
+                -sourceImg.width * previewScale / 2, 
+                -sourceImg.height * previewScale / 2, 
+                sourceImg.width * previewScale, 
+                sourceImg.height * previewScale
+            );
+            ctx.restore();
+            
+            targetImgs[i].src = canvas.toDataURL('image/png');
         }
         previewArea.style.display = 'block';
         dropZone.style.display = 'none';
-        
-        // 保存当前的 sourceGap 供下载使用，避免 resize 导致不一致
         window.currentSourceGap = sourceGap;
     }
 
     // 下载逻辑：重新生成原画质切片并下载
     function downloadAll() {
-        if (window.currentSourceGap === undefined) return;
+        if (!sourceImg || window.currentSourceGap === undefined) return;
         
         const n = parseInt(slicesInput.value);
         const sourceGap = window.currentSourceGap;
         const sliceH = (sourceImg.height - (sourceGap * (n - 1))) / n;
+        const userScale = parseFloat(scaleInput.value);
+        const userOffsetPct = parseInt(offsetInput.value) / 100;
+        const offsetPx = userOffsetPct * sourceImg.height;
 
-        // 创建临时画布用于生成原图切片
         const canvas = document.createElement('canvas');
         canvas.width = sourceImg.width;
         canvas.height = sliceH;
@@ -156,13 +190,25 @@
             setTimeout(() => {
                 const sy = i * (sliceH + sourceGap);
                 ctx.clearRect(0, 0, canvas.width, canvas.height); // 清空画布
-                ctx.drawImage(sourceImg, 0, sy, sourceImg.width, sliceH, 0, 0, canvas.width, canvas.height);
+                
+                ctx.save();
+                ctx.translate(0, -sy);
+                
+                const cx = sourceImg.width / 2;
+                const cy = sourceImg.height / 2;
+                ctx.translate(cx, cy);
+                
+                ctx.scale(userScale, userScale);
+                ctx.translate(0, offsetPx);
+
+                ctx.drawImage(sourceImg, -sourceImg.width/2, -sourceImg.height/2);
+                ctx.restore();
                 
                 const a = document.createElement('a');
                 a.href = canvas.toDataURL('image/png');
                 a.download = `X_Split_${i+1}.png`;
                 a.click();
-            }, i * 300); // 间隔 300ms 依次处理
+            }, i * 300);
         }
     }
 
@@ -197,6 +243,8 @@
     // 性能优化：拖动时只更新数值，松手时才渲染图片
     slicesInput.oninput = updateUI;
     gapInput.oninput = updateUI;
+    scaleInput.oninput = updateUI;
+    offsetInput.oninput = updateUI;
     
     // 初始化 UI 状态
     updateUI();
