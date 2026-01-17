@@ -360,6 +360,13 @@
     
     // 初始化 UI 状态
     updateUI();
+    
+    // URL 参数检查：如果包含 ?mode=stitch，自动进入拼接模式
+    // 示例：index.html?mode=stitch
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('mode') === 'stitch') {
+        switchMode('stitch');
+    }
 
     // --- 拼接模式逻辑 ---
     const stitchFileInput = document.getElementById('stitch-file-input');
