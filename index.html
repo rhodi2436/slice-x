@@ -42,6 +42,11 @@
         .btn-main:hover { background: #1a91da; }
         .btn-outline { background: #eff3f4; color: #0f1419; }
         
+        /* Template buttons */
+        .template-btn { flex: 1; border: 2px solid #e1e8ed; background: white; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 14px; transition: 0.2s; }
+        .template-btn:hover { border-color: var(--x-blue); }
+        .template-btn.active { border-color: var(--x-blue); background: #e8f5fe; color: var(--x-blue); font-weight: bold; }
+        
         .metadata-area { margin-top: 15px; display: none; }
         .metadata-area textarea { width: 100%; height: 80px; padding: 10px; border-radius: 8px; border: 1px solid #cfd9de; background: #f7f9f9; font-family: monospace; font-size: 12px; resize: none; box-sizing: border-box; }
         .metadata-label { font-size: 13px; color: #536471; margin-bottom: 5px; display: block; }
@@ -126,6 +131,19 @@
     <!-- 拼接模式 -->
     <div id="stitch-app" style="display:none;">
         <div class="control-panel">
+            <!-- Template Selection -->
+            <div class="slider-group">
+                <label><span data-i18n="stitchTemplate">拼接方向</span></label>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button class="template-btn active" onclick="selectTemplate('vertical')" data-template="vertical">
+                        <span data-i18n="templateVertical">⬇️ 纵向</span>
+                    </button>
+                    <button class="template-btn" onclick="selectTemplate('horizontal')" data-template="horizontal">
+                        <span data-i18n="templateHorizontal">➡️ 横向</span>
+                    </button>
+                </div>
+            </div>
+            
              <div class="slider-group">
                 <label><span data-i18n="stitchGap">填充间隙 (px)</span> <span id="stitch-g-val">0</span></label>
                 <input type="range" id="stitch-gap" min="0" max="100" value="0">
@@ -196,6 +214,9 @@
             downloadStitched: "下载还原长图",
             reverseOrder: "⇅ 反转顺序",
             metadataLabel: "AI 填充元数据 (Gap Metadata)",
+            stitchTemplate: "拼接方向",
+            templateVertical: "⬇️ 纵向",
+            templateHorizontal: "➡️ 横向",
             invalidUrl: "无效的 X 链接",
             noImagesFound: "该推文中未找到图片",
             imagesFound: "找到 {n} 张图片，正在下载...",
@@ -222,6 +243,9 @@
             downloadStitched: "Download Long Image",
             reverseOrder: "⇅ Reverse Order",
             metadataLabel: "Gap Metadata",
+            stitchTemplate: "Stitch Direction",
+            templateVertical: "⬇️ Vertical",
+            templateHorizontal: "➡️ Horizontal",
             invalidUrl: "Invalid X URL",
             noImagesFound: "No images found in this tweet",
             imagesFound: "Found {n} images, downloading...",
@@ -305,6 +329,7 @@
             stitchPreviewArea.style.display = 'none';
             document.getElementById('metadata-box').style.display = 'none';
             stitchImgContainer.innerHTML = '';
+            xUrlInput.value = '';
         }
     }
 
@@ -497,6 +522,16 @@
     let stitchImages = []; // Array of Image objects
     let dragStartIndex;
     let touchDragItem = null; // 用于移动端拖拽
+    let currentTemplate = 'vertical'; // Default template
+    
+    // 模板选择
+    function selectTemplate(template) {
+        currentTemplate = template;
+        document.querySelectorAll('.template-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-template') === template);
+        });
+        renderStitch(false); // Re-render preview without rebuilding sortable list
+    }
     
     // 监听 Gap 变化
     stitchGapInput.oninput = () => {
@@ -725,51 +760,98 @@
         stitchPreviewArea.style.display = 'block';
         stitchImgContainer.innerHTML = ''; 
 
-        const baseWidth = stitchImages[0].width;
         const gap = parseInt(stitchGapInput.value);
-        let totalHeight = 0;
         let metadata = [];
-        // ... (rest logic same)
         
-        // 计算总高度
-        stitchImages.forEach((img, idx) => {
-            const h = img.height * (baseWidth / img.width);
-            totalHeight += h;
-            if (gap > 0 && idx < stitchImages.length - 1) {
-                totalHeight += gap;
-            }
-        });
-        
-        const canvas = document.createElement('canvas');
-        canvas.width = baseWidth;
-        canvas.height = totalHeight;
-        const ctx = canvas.getContext('2d');
-        
-        let currentY = 0;
-        
-        stitchImages.forEach((img, idx) => {
-            const h = img.height * (baseWidth / img.width);
-            ctx.drawImage(img, 0, currentY, baseWidth, h);
-            currentY += h;
+        if (currentTemplate === 'vertical') {
+            // Vertical stitching (original logic)
+            const baseWidth = stitchImages[0].width;
+            let totalHeight = 0;
             
-            if (gap > 0 && idx < stitchImages.length - 1) {
-                drawMosaic(ctx, 0, currentY, baseWidth, gap);
+            // 计算总高度
+            stitchImages.forEach((img, idx) => {
+                const h = img.height * (baseWidth / img.width);
+                totalHeight += h;
+                if (gap > 0 && idx < stitchImages.length - 1) {
+                    totalHeight += gap;
+                }
+            });
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = baseWidth;
+            canvas.height = totalHeight;
+            const ctx = canvas.getContext('2d');
+            
+            let currentY = 0;
+            
+            stitchImages.forEach((img, idx) => {
+                const h = img.height * (baseWidth / img.width);
+                ctx.drawImage(img, 0, currentY, baseWidth, h);
+                currentY += h;
                 
-                metadata.push({
-                    index: idx,
-                    y: currentY,
-                    height: gap,
-                    width: baseWidth
-                });
+                if (gap > 0 && idx < stitchImages.length - 1) {
+                    drawMosaic(ctx, 0, currentY, baseWidth, gap);
+                    
+                    metadata.push({
+                        index: idx,
+                        y: currentY,
+                        height: gap,
+                        width: baseWidth
+                    });
+                    
+                    currentY += gap;
+                }
+            });
+            
+            const resultImg = document.createElement('img');
+            resultImg.src = canvas.toDataURL('image/png');
+            resultImg.style.width = '100%'; 
+            stitchImgContainer.appendChild(resultImg);
+        } else {
+            // Horizontal stitching (new logic)
+            const baseHeight = stitchImages[0].height;
+            let totalWidth = 0;
+            
+            // 计算总宽度
+            stitchImages.forEach((img, idx) => {
+                const w = img.width * (baseHeight / img.height);
+                totalWidth += w;
+                if (gap > 0 && idx < stitchImages.length - 1) {
+                    totalWidth += gap;
+                }
+            });
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = totalWidth;
+            canvas.height = baseHeight;
+            const ctx = canvas.getContext('2d');
+            
+            let currentX = 0;
+            
+            stitchImages.forEach((img, idx) => {
+                const w = img.width * (baseHeight / img.height);
+                ctx.drawImage(img, currentX, 0, w, baseHeight);
+                currentX += w;
                 
-                currentY += gap;
-            }
-        });
-        
-        const resultImg = document.createElement('img');
-        resultImg.src = canvas.toDataURL('image/png');
-        resultImg.style.width = '100%'; 
-        stitchImgContainer.appendChild(resultImg);
+                if (gap > 0 && idx < stitchImages.length - 1) {
+                    drawMosaic(ctx, currentX, 0, gap, baseHeight);
+                    
+                    metadata.push({
+                        index: idx,
+                        x: currentX,
+                        width: gap,
+                        height: baseHeight
+                    });
+                    
+                    currentX += gap;
+                }
+            });
+            
+            const resultImg = document.createElement('img');
+            resultImg.src = canvas.toDataURL('image/png');
+            resultImg.style.width = '100%'; 
+            stitchImgContainer.appendChild(resultImg);
+        }
         
         if (gap > 0) {
              document.getElementById('metadata-box').style.display = 'block';
