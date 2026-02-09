@@ -529,7 +529,7 @@
         document.querySelectorAll('.template-btn').forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-template') === template);
         });
-        renderStitch(false); // Re-render with new template
+        renderStitch(false); // Re-render preview without rebuilding sortable list
     }
     
     // 监听 Gap 变化

@@ -1,5 +1,7 @@
 name: Deploy Feature to GitHub Pages
 
+# This workflow deploys the specific feature branch to /feat subdirectory
+# It is intentionally branch-specific for this feature preview
 on:
   push:
     branches:
