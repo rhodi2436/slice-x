@@ -1,0 +1,57 @@
+name: Deploy Feature to GitHub Pages
+
+on:
+  push:
+    branches:
+      - copilot/add-template-selection-feature
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment
+concurrency:
+  group: "pages-feat"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          path: feature
+        
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+        
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        
+      - name: Prepare deployment directory
+        run: |
+          # Create deployment directory with main branch content at root
+          mkdir -p deploy
+          cp main/index.html deploy/index.html
+          cp main/README.md deploy/README.md
+          
+          # Create feat subdirectory with feature branch content
+          mkdir -p deploy/feat
+          cp feature/index.html deploy/feat/index.html
+          cp feature/README.md deploy/feat/README.md
+          
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './deploy'
+          
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
