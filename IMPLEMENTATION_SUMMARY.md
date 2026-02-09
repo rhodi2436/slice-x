@@ -25,7 +25,7 @@ Added UI controls allowing users to choose between:
 - Calculates total width based on first image's height (aspect ratio preservation)
 - Renders each image at proportional width to maintain consistent height
 - Supports optional gap filling with mosaic pattern
-- Generates metadata for AI gap detection (same format as vertical)
+- Generates metadata for AI gap detection using horizontal (x-based) gap coordinates, complementing the vertical (y-based) format
 
 **Algorithm:**
 ```javascript
