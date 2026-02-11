@@ -24,6 +24,8 @@
         .slider-group { margin-bottom: 15px; }
         .slider-group label { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px; color: #536471; }
         input[type="range"] { width: 100%; accent-color: var(--x-blue); }
+        .text-input { width: 100%; padding: 8px 12px; border: 1px solid #cfd9de; border-radius: 10px; box-sizing: border-box; }
+        .hint-text { font-size: 12px; color: #536471; margin-top: 6px; }
 
         /* 上传区 */
         .upload-zone { border: 2px dashed #cfd9de; border-radius: 12px; padding: 40px 20px; text-align: center; cursor: pointer; transition: 0.2s; }
@@ -129,7 +131,7 @@
     </div>
 
     <!-- 拼接模式 -->
-    <div id="stitch-app" style="display:none;">
+        <div id="stitch-app" style="display:none;">
         <div class="control-panel">
             <!-- Template Selection -->
             <div class="slider-group">
@@ -147,6 +149,11 @@
              <div class="slider-group">
                 <label><span data-i18n="stitchGap">填充间隙 (px)</span> <span id="stitch-g-val">0</span></label>
                 <input type="range" id="stitch-gap" min="0" max="100" value="0">
+            </div>
+            <div class="slider-group">
+                <label><span data-i18n="stitchLayout">自定义拼接布局</span></label>
+                <input type="text" id="stitch-layout" class="text-input" placeholder="例如: 2,2" data-i18n-placeholder="stitchLayoutPlaceholder">
+                <div id="layout-status" class="hint-text" data-i18n="stitchLayoutHint">留空为纵向拼接；输入 2,2 表示 2 列 2 行四宫格</div>
             </div>
             
             <!-- X URL 输入 -->
@@ -206,6 +213,12 @@
             downloadAll: "一键下载全部切片",
             reset: "重新上传",
             stitchGap: "填充间隙 (px)",
+            stitchLayout: "自定义拼接布局",
+            stitchLayoutPlaceholder: "例如: 2,2",
+            stitchLayoutHint: "留空为纵向拼接；输入 2,2 表示 2 列 2 行四宫格",
+            invalidLayout: "布局格式错误，请输入如 2,2",
+            layoutTooSmall: "布局容量不足，仅使用前 {n} 张图片",
+            canvasScaled: "画布过大，已按比例缩小到 {w}x{h}",
             xUrlPlaceholder: "粘贴 X 帖子链接 (https://x.com/...)",
             fetchBtn: "获取图片",
             fetching: "正在获取...",
@@ -235,6 +248,12 @@
             downloadAll: "Download All Slices",
             reset: "Upload New",
             stitchGap: "Fill Gap (px)",
+            stitchLayout: "Custom Stitch Layout",
+            stitchLayoutPlaceholder: "e.g. 2,2",
+            stitchLayoutHint: "Leave empty for vertical stitch; use 2,2 for a 2x2 grid",
+            invalidLayout: "Invalid layout format, use values like 2,2",
+            layoutTooSmall: "Layout is too small, only first {n} images are used",
+            canvasScaled: "Canvas is too large, scaled down to {w}x{h}",
             xUrlPlaceholder: "Paste X Post URL (https://x.com/...)",
             fetchBtn: "Fetch Images",
             fetching: "Fetching...",
@@ -518,6 +537,8 @@
     const metadataBox = document.getElementById('metadata-content');
     const xUrlInput = document.getElementById('x-url');
     const fetchStatus = document.getElementById('fetch-status');
+    const stitchLayoutInput = document.getElementById('stitch-layout');
+    const layoutStatus = document.getElementById('layout-status');
     
     let stitchImages = []; // Array of Image objects
     let dragStartIndex;
@@ -537,6 +558,58 @@
     stitchGapInput.oninput = () => {
         document.getElementById('stitch-g-val').innerText = stitchGapInput.value + 'px';
         renderStitch(false); // UI update doesn't need to rebuild list
+    }
+    stitchLayoutInput.oninput = () => renderStitch(false);
+
+    function showLayoutStatus(msg, isError = false) {
+        layoutStatus.innerText = msg || t('stitchLayoutHint');
+        layoutStatus.style.color = isError ? '#e0245e' : '#536471';
+    }
+
+    function parseStitchLayout() {
+        const raw = stitchLayoutInput.value.trim();
+        if (!raw) {
+            showLayoutStatus('', false);
+            return { enabled: false };
+        }
+        const match = raw.match(/^(\d+)\s*[,xX，]\s*(\d+)$/);
+        if (!match) {
+            showLayoutStatus(t('invalidLayout'), true);
+            return { enabled: true, valid: false };
+        }
+        const cols = parseInt(match[1], 10);
+        const rows = parseInt(match[2], 10);
+        if (cols < 1 || rows < 1) {
+            showLayoutStatus(t('invalidLayout'), true);
+            return { enabled: true, valid: false };
+        }
+        showLayoutStatus('', false);
+        return { enabled: true, valid: true, cols, rows };
+    }
+
+    function createSafeCanvas(targetWidth, targetHeight) {
+        const MAX_DIMENSION = 16384;
+        const MAX_AREA = 268000000;
+        let scale = 1;
+        const maxSide = Math.max(targetWidth, targetHeight);
+        if (maxSide > MAX_DIMENSION) {
+            scale = Math.min(scale, MAX_DIMENSION / maxSide);
+        }
+        const area = targetWidth * targetHeight;
+        if (area > MAX_AREA) {
+            scale = Math.min(scale, Math.sqrt(MAX_AREA / area));
+        }
+        const width = Math.max(1, Math.floor(targetWidth * scale));
+        const height = Math.max(1, Math.floor(targetHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        return {
+            canvas,
+            ctx: canvas.getContext('2d'),
+            drawScale: scale,
+            wasScaled: scale < 1
+        };
     }
 
     // 从 X 获取图片逻辑
@@ -761,14 +834,82 @@
         stitchImgContainer.innerHTML = ''; 
 
         const gap = parseInt(stitchGapInput.value);
+        const baseWidth = stitchImages[0].width;
+        let totalHeight = 0;
+        let totalWidth = baseWidth;
         let metadata = [];
+        const layout = parseStitchLayout();
+        if (layout.enabled && !layout.valid) return;
         
-        if (currentTemplate === 'vertical') {
-            // Vertical stitching (original logic)
-            const baseWidth = stitchImages[0].width;
-            let totalHeight = 0;
-            
-            // 计算总高度
+        if (layout.enabled) {
+            const slots = layout.cols * layout.rows;
+            const images = stitchImages.slice(0, slots);
+            const rowHeights = Array(layout.rows).fill(0);
+            const scaledHeights = images.map(img => img.height * (baseWidth / img.width));
+
+            images.forEach((img, idx) => {
+                const row = Math.floor(idx / layout.cols);
+                rowHeights[row] = Math.max(rowHeights[row], scaledHeights[idx]);
+            });
+
+            totalWidth = layout.cols * baseWidth + (layout.cols - 1) * gap;
+            totalHeight = rowHeights.reduce((sum, h) => sum + h, 0) + (layout.rows - 1) * gap;
+
+            const safeCanvas = createSafeCanvas(totalWidth, totalHeight);
+            const canvas = safeCanvas.canvas;
+            const ctx = safeCanvas.ctx;
+            const drawScale = safeCanvas.drawScale;
+
+            let rowY = 0;
+            for (let r = 0; r < layout.rows; r++) {
+                for (let c = 0; c < layout.cols; c++) {
+                    const idx = r * layout.cols + c;
+                    if (idx >= images.length) continue;
+                    const drawH = scaledHeights[idx] * drawScale;
+                    const x = c * (baseWidth + gap) * drawScale;
+                    const y = rowY * drawScale;
+                    ctx.drawImage(images[idx], x, y, baseWidth * drawScale, drawH);
+                }
+                rowY += rowHeights[r] + (r < layout.rows - 1 ? gap : 0);
+            }
+
+            if (gap > 0) {
+                for (let c = 0; c < layout.cols - 1; c++) {
+                    const gapX = ((c + 1) * baseWidth + c * gap) * drawScale;
+                    const gapW = gap * drawScale;
+                    drawMosaic(ctx, gapX, 0, gapW, canvas.height);
+                    metadata.push({ type: 'vertical', x: gapX, y: 0, width: gapW, height: canvas.height });
+                }
+                let gapY = 0;
+                for (let r = 0; r < layout.rows - 1; r++) {
+                    gapY += rowHeights[r];
+                    const scaledGapY = gapY * drawScale;
+                    const gapH = gap * drawScale;
+                    drawMosaic(ctx, 0, scaledGapY, canvas.width, gapH);
+                    metadata.push({ type: 'horizontal', x: 0, y: scaledGapY, width: canvas.width, height: gapH });
+                    gapY += gap;
+                }
+            }
+
+            const statusParts = [];
+            if (stitchImages.length > slots) {
+                statusParts.push(t('layoutTooSmall', { n: slots }));
+            }
+            if (safeCanvas.wasScaled) {
+                statusParts.push(t('canvasScaled', { w: canvas.width, h: canvas.height }));
+            }
+            if (statusParts.length > 0) {
+                showLayoutStatus(statusParts.join(currentLang === 'zh' ? '；' : '; '), true);
+            } else {
+                showLayoutStatus('', false);
+            }
+
+            const resultImg = document.createElement('img');
+            resultImg.src = canvas.toDataURL('image/png');
+            resultImg.style.width = '100%';
+            stitchImgContainer.appendChild(resultImg);
+        } else {
+            // 默认纵向拼接
             stitchImages.forEach((img, idx) => {
                 const h = img.height * (baseWidth / img.width);
                 totalHeight += h;
@@ -777,87 +918,100 @@
                 }
             });
             
-            const canvas = document.createElement('canvas');
-            canvas.width = baseWidth;
-            canvas.height = totalHeight;
-            const ctx = canvas.getContext('2d');
+            const safeCanvas = createSafeCanvas(baseWidth, totalHeight);
+            const canvas = safeCanvas.canvas;
+            const ctx = safeCanvas.ctx;
+            const drawScale = safeCanvas.drawScale;
             
             let currentY = 0;
             
             stitchImages.forEach((img, idx) => {
                 const h = img.height * (baseWidth / img.width);
-                ctx.drawImage(img, 0, currentY, baseWidth, h);
+                const y = currentY * drawScale;
+                const drawH = h * drawScale;
+                ctx.drawImage(img, 0, y, baseWidth * drawScale, drawH);
                 currentY += h;
                 
                 if (gap > 0 && idx < stitchImages.length - 1) {
-                    drawMosaic(ctx, 0, currentY, baseWidth, gap);
+                    const gapY = currentY * drawScale;
+                    const gapH = gap * drawScale;
+                    drawMosaic(ctx, 0, gapY, baseWidth * drawScale, gapH);
                     
                     metadata.push({
                         index: idx,
-                        y: currentY,
-                        height: gap,
-                        width: baseWidth
+                        y: gapY,
+                        height: gapH,
+                        width: baseWidth * drawScale
                     });
                     
                     currentY += gap;
                 }
             });
-            
             const resultImg = document.createElement('img');
             resultImg.src = canvas.toDataURL('image/png');
             resultImg.style.width = '100%'; 
             stitchImgContainer.appendChild(resultImg);
-        } else {
-            // Horizontal stitching (new logic)
+            if (safeCanvas.wasScaled) {
+                showLayoutStatus(t('canvasScaled', { w: canvas.width, h: canvas.height }), true);
+            } else {
+                showLayoutStatus('', false);
+            }
+        } else if (currentTemplate === 'horizontal') {
+            // 横向拼接（无自定义布局时生效）
             const baseHeight = stitchImages[0].height;
-            let totalWidth = 0;
-            
-            // 计算总宽度
+            let totalCanvasWidth = 0;
+
             stitchImages.forEach((img, idx) => {
                 const w = img.width * (baseHeight / img.height);
-                totalWidth += w;
+                totalCanvasWidth += w;
                 if (gap > 0 && idx < stitchImages.length - 1) {
-                    totalWidth += gap;
+                    totalCanvasWidth += gap;
                 }
             });
-            
-            const canvas = document.createElement('canvas');
-            canvas.width = totalWidth;
-            canvas.height = baseHeight;
-            const ctx = canvas.getContext('2d');
-            
+
+            const safeCanvas = createSafeCanvas(totalCanvasWidth, baseHeight);
+            const canvas = safeCanvas.canvas;
+            const ctx = safeCanvas.ctx;
+            const drawScale = safeCanvas.drawScale;
+
             let currentX = 0;
-            
             stitchImages.forEach((img, idx) => {
                 const w = img.width * (baseHeight / img.height);
-                ctx.drawImage(img, currentX, 0, w, baseHeight);
+                const x = currentX * drawScale;
+                const drawW = w * drawScale;
+                ctx.drawImage(img, x, 0, drawW, baseHeight * drawScale);
                 currentX += w;
-                
+
                 if (gap > 0 && idx < stitchImages.length - 1) {
-                    drawMosaic(ctx, currentX, 0, gap, baseHeight);
-                    
+                    const gapX = currentX * drawScale;
+                    const gapW = gap * drawScale;
+                    drawMosaic(ctx, gapX, 0, gapW, baseHeight * drawScale);
                     metadata.push({
                         index: idx,
-                        x: currentX,
-                        width: gap,
-                        height: baseHeight
+                        x: gapX,
+                        width: gapW,
+                        height: baseHeight * drawScale
                     });
-                    
                     currentX += gap;
                 }
             });
-            
+
             const resultImg = document.createElement('img');
             resultImg.src = canvas.toDataURL('image/png');
-            resultImg.style.width = '100%'; 
+            resultImg.style.width = '100%';
             stitchImgContainer.appendChild(resultImg);
+            if (safeCanvas.wasScaled) {
+                showLayoutStatus(t('canvasScaled', { w: canvas.width, h: canvas.height }), true);
+            } else {
+                showLayoutStatus('', false);
+            }
         }
-        
         if (gap > 0) {
              document.getElementById('metadata-box').style.display = 'block';
              metadataBox.value = JSON.stringify(metadata, null, 2);
         } else {
              document.getElementById('metadata-box').style.display = 'none';
+             metadataBox.value = '';
         }
     }
     
