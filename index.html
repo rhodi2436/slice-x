@@ -908,54 +908,6 @@
             resultImg.src = canvas.toDataURL('image/png');
             resultImg.style.width = '100%';
             stitchImgContainer.appendChild(resultImg);
-        } else {
-            // 默认纵向拼接
-            stitchImages.forEach((img, idx) => {
-                const h = img.height * (baseWidth / img.width);
-                totalHeight += h;
-                if (gap > 0 && idx < stitchImages.length - 1) {
-                    totalHeight += gap;
-                }
-            });
-            
-            const safeCanvas = createSafeCanvas(baseWidth, totalHeight);
-            const canvas = safeCanvas.canvas;
-            const ctx = safeCanvas.ctx;
-            const drawScale = safeCanvas.drawScale;
-            
-            let currentY = 0;
-            
-            stitchImages.forEach((img, idx) => {
-                const h = img.height * (baseWidth / img.width);
-                const y = currentY * drawScale;
-                const drawH = h * drawScale;
-                ctx.drawImage(img, 0, y, baseWidth * drawScale, drawH);
-                currentY += h;
-                
-                if (gap > 0 && idx < stitchImages.length - 1) {
-                    const gapY = currentY * drawScale;
-                    const gapH = gap * drawScale;
-                    drawMosaic(ctx, 0, gapY, baseWidth * drawScale, gapH);
-                    
-                    metadata.push({
-                        index: idx,
-                        y: gapY,
-                        height: gapH,
-                        width: baseWidth * drawScale
-                    });
-                    
-                    currentY += gap;
-                }
-            });
-            const resultImg = document.createElement('img');
-            resultImg.src = canvas.toDataURL('image/png');
-            resultImg.style.width = '100%'; 
-            stitchImgContainer.appendChild(resultImg);
-            if (safeCanvas.wasScaled) {
-                showLayoutStatus(t('canvasScaled', { w: canvas.width, h: canvas.height }), true);
-            } else {
-                showLayoutStatus('', false);
-            }
         } else if (currentTemplate === 'horizontal') {
             // 横向拼接（无自定义布局时生效）
             const baseHeight = stitchImages[0].height;
@@ -999,6 +951,54 @@
             const resultImg = document.createElement('img');
             resultImg.src = canvas.toDataURL('image/png');
             resultImg.style.width = '100%';
+            stitchImgContainer.appendChild(resultImg);
+            if (safeCanvas.wasScaled) {
+                showLayoutStatus(t('canvasScaled', { w: canvas.width, h: canvas.height }), true);
+            } else {
+                showLayoutStatus('', false);
+            }
+        } else {
+            // 默认纵向拼接
+            stitchImages.forEach((img, idx) => {
+                const h = img.height * (baseWidth / img.width);
+                totalHeight += h;
+                if (gap > 0 && idx < stitchImages.length - 1) {
+                    totalHeight += gap;
+                }
+            });
+            
+            const safeCanvas = createSafeCanvas(baseWidth, totalHeight);
+            const canvas = safeCanvas.canvas;
+            const ctx = safeCanvas.ctx;
+            const drawScale = safeCanvas.drawScale;
+            
+            let currentY = 0;
+            
+            stitchImages.forEach((img, idx) => {
+                const h = img.height * (baseWidth / img.width);
+                const y = currentY * drawScale;
+                const drawH = h * drawScale;
+                ctx.drawImage(img, 0, y, baseWidth * drawScale, drawH);
+                currentY += h;
+                
+                if (gap > 0 && idx < stitchImages.length - 1) {
+                    const gapY = currentY * drawScale;
+                    const gapH = gap * drawScale;
+                    drawMosaic(ctx, 0, gapY, baseWidth * drawScale, gapH);
+                    
+                    metadata.push({
+                        index: idx,
+                        y: gapY,
+                        height: gapH,
+                        width: baseWidth * drawScale
+                    });
+                    
+                    currentY += gap;
+                }
+            });
+            const resultImg = document.createElement('img');
+            resultImg.src = canvas.toDataURL('image/png');
+            resultImg.style.width = '100%'; 
             stitchImgContainer.appendChild(resultImg);
             if (safeCanvas.wasScaled) {
                 showLayoutStatus(t('canvasScaled', { w: canvas.width, h: canvas.height }), true);
